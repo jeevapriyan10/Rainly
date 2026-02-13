@@ -142,11 +142,18 @@ async def send_email(to_email: str, subject: str, html_body: str) -> dict:
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
-        # Try standard TLS port 587 (better for cloud environments)
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login(GMAIL_ADDRESS.strip(), GMAIL_PASSWORD.strip())
-            server.send_message(msg)
+        # Try standard TLS port 587 first
+        try:
+            with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
+                server.starttls()
+                server.login(GMAIL_ADDRESS.strip(), GMAIL_PASSWORD.strip())
+                server.send_message(msg)
+        except Exception as e1:
+            print(f"[WARN] Port 587 failed ({e1}), trying SSL 465...")
+            # Fallback to SSL port 465
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
+                server.login(GMAIL_ADDRESS.strip(), GMAIL_PASSWORD.strip())
+                server.send_message(msg)
         
         print(f"[SUCCESS] Email sent to {to_email}")
         return {"status": "sent"}
