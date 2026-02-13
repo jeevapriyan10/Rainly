@@ -8,7 +8,7 @@ const Dashboard = () => {
     const [regions, setRegions] = useState([]);
     const [devices, setDevices] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { isConnected, deviceUpdates, alerts } = useWebSocket();
+    const { isConnected } = useWebSocket();
 
     useEffect(() => {
         loadData();
