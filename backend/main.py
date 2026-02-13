@@ -4,28 +4,49 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import List
 import uuid
+import os
 
 from db import connect_db, close_db, get_db
 from models import Region, Device, Participant, Warning, SensorPayload
 from predictor import predict_flood_risk
 from notify import send_notification, send_flood_alert
+from download_model import download_model
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
+    
     # Auto-seed if empty
     db = get_db()
     if await db.regions.count_documents({}) == 0:
         print("[INIT] Database empty. Seeding initial data...")
-        # Call the seed logic directly (extracted or called via internal request logic)
-        # For simplicity, we can just call the function if it was not an endpoint, 
-        # but since it is, let's just use the logic from seed_database or import it.
-        # Ideally, we should refactor seed_database to be a standalone function.
-        # But here I'll just let the user know or make a quick internal call if possible.
-        # Actually, let's just duplicate the crucial seeding logic or trigger it.
-        # Or even better, let's just make the seed endpoint function accessible/imported and run it.
         await seed_database()
         print("[SUCCESS] Database seeded!")
+    
+    # Check for LLM Model (if local provider)
+    if os.getenv("LLM_PROVIDER", "google") == "local":
+        print("[INIT] Checking for local LLM model...")
+        model_file = os.getenv("LLM_MODEL_FILE", "qwen2-0_5b-instruct-q4_k_m.gguf")
+        
+        # Ensure directory exists relative to current file
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(base_dir, "models", "llm", model_file)
+        
+        if not os.path.exists(model_path):
+             print(f"[INFO] Model not found at {model_path}. Downloading...")
+             
+             # Determine model key based on filename
+             model_key = "qwen"
+             if "tinyllama" in model_file.lower():
+                 model_key = "tinyllama"
+             elif "phi" in model_file.lower():
+                 model_key = "phi2"
+                 
+             # Call download function
+             print(f"[INFO] Starting download for {model_key}...")
+             download_model(model_key)
+        else:
+            print("[SUCCESS] Local LLM model found.")
     yield
     await close_db()
 

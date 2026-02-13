@@ -1,4 +1,4 @@
-# Core dependencies (Updated for Python 3.13 compatibility)
+# Core dependencies
 fastapi>=0.110.0
 uvicorn>=0.29.0
 motor>=3.4.0
@@ -12,11 +12,9 @@ websockets>=12.0
 twilio>=9.0.0
 python-multipart>=0.0.9
 
-# LLM Support (for local models)
-# Using generic version to fetch latest compatible wheel
-llama-cpp-python>=0.2.70
+# Cloud LLM Support (Lightweight)
 google-generativeai>=0.4.1
-
+llama-cpp-python>=0.2.70
 # Utilities
 requests>=2.31.0
 tqdm>=4.66.0
