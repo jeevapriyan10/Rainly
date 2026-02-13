@@ -142,8 +142,10 @@ async def send_email(to_email: str, subject: str, html_body: str) -> dict:
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(GMAIL_ADDRESS, GMAIL_PASSWORD)
+        # Try standard TLS port 587 (better for cloud environments)
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(GMAIL_ADDRESS.strip(), GMAIL_PASSWORD.strip())
             server.send_message(msg)
         
         print(f"[SUCCESS] Email sent to {to_email}")
