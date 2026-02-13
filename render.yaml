@@ -1,0 +1,38 @@
+services:
+  # Backend API Service
+  - type: web
+    name: flood-detection-backend
+    env: python
+    region: singapore
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URI
+        sync: false  # User provides this manually
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: LLM_ENABLED
+        value: "false"  # Set to "true" only if you supply a model file or configure download
+      - key: GMAIL_ADDRESS
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+
+  # Frontend Static Site
+  - type: static
+    name: flood-detection-frontend
+    env: node
+    region: singapore
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: flood-detection-backend
+          property: url
+          envVarKey: REACT_APP_API_URL  # Wait, this sets it on the BUILD env? Yes, React needs build-time env vars.

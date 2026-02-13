@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Models (CRITICAL: Do not upload large files)
+backend/models/llm/*.gguf
+backend/models/llm/*.bin
+backend/models/
+*.gguf
+
+# Node/Frontend
+node_modules/
+build/
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

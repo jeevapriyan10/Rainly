@@ -1,0 +1,22 @@
+# Core dependencies (Updated for Python 3.13 compatibility)
+fastapi>=0.110.0
+uvicorn>=0.29.0
+motor>=3.4.0
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+
+# Real-time WebSocket
+websockets>=12.0
+
+# Email & SMS
+twilio>=9.0.0
+python-multipart>=0.0.9
+
+# LLM Support (for local models)
+# Using generic version to fetch latest compatible wheel
+llama-cpp-python>=0.2.70
+google-generativeai>=0.4.1
+
+# Utilities
+requests>=2.31.0
+tqdm>=4.66.0
