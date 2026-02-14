@@ -41,6 +41,25 @@ const SimulatorTab = () => {
         }
     }, [deviceUpdates, selectedDevice]);
 
+    // Auto-select active device on load
+    useEffect(() => {
+        if (activeSimulations.length > 0 && !selectedDevice && devices.length > 0) {
+            const activeId = activeSimulations[0];
+            const device = devices.find(d => d.device_id === activeId);
+            if (device) {
+                setSelectedDevice(device);
+                setFormData({
+                    sensor_id: device.device_id,
+                    region_id: device.region_id,
+                    water_level: device.last_water_level || 290,
+                    rainfall: device.last_rainfall || 30,
+                    flow_rate: device.last_flow_rate || 1000
+                });
+            }
+        }
+    }, [activeSimulations, devices, selectedDevice]);
+
+
     const loadDevices = async () => {
         try {
             const data = await fetchDevices();

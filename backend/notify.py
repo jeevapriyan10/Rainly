@@ -37,6 +37,10 @@ GMAIL_ADDRESS = os.getenv('GMAIL_ADDRESS')
 GMAIL_PASSWORD = os.getenv('GMAIL_PASSWORD')
 EMAIL_ENABLED = bool(RESEND_API_KEY or (GMAIL_ADDRESS and GMAIL_PASSWORD))
 
+# In development/test mode for Resend Free Tier, you can only send to yourself.
+# We hardcode the owner's email or use verify env var to intercept all alerts.
+DEV_EMAIL_RECIPIENT = os.getenv('DEV_EMAIL_RECIPIENT', 'yo.heisenberg10@gmail.com')
+
 def format_sms_alert(region_name: str, river_name: str, risk_level: str, water_level: float, threshold: float, action: str) -> str:
     """Format SMS message (max 160 chars for free SMS)"""
     if risk_level == "CRITICAL":
@@ -233,6 +237,7 @@ async def send_flood_alert(participant: dict, region: dict, device: dict, predic
     
     # 2. Email (Detailed)
     participant_email = participant.get('email')
+    
     if participant_email:
         email_subject = f"[{prediction.get('risk_level', 'INFO')}] Flood Alert - {region.get('name', 'Unknown')}"
         
