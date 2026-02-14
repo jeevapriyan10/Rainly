@@ -33,6 +33,89 @@ except Exception as e:
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
 import requests
 
+def format_sms_alert(region_name: str, river_name: str, risk_level: str, water_level: float, threshold: float, action: str) -> str:
+    """Format SMS message (max 160 chars for free SMS)"""
+    if risk_level == "CRITICAL":
+        return f"[CRITICAL] FLOOD at {region_name}, {river_name}! Water {water_level}m (limit {threshold}m). EVACUATE NOW!"
+    elif risk_level == "HIGH":
+        return f"[HIGH] Flood risk at {region_name}, {river_name}. Water {water_level}m. Evacuate immediately."
+    elif risk_level == "MEDIUM":
+        return f"[WARNING] Flood warning at {region_name}. Water rising. Prepare for evacuation."
+    else:
+        return f"[INFO] Flood monitor: {region_name} normal. Water {water_level}m."
+
+def format_email_alert(participant_name: str, region_name: str, river_name: str, risk_level: str, water_level: float, threshold: float, rainfall: float, action: str) -> str:
+    """Format HTML email"""
+    color = {"CRITICAL": "#dc2626", "HIGH": "#ef4444", "MEDIUM": "#f59e0b", "LOW": "#10b981"}.get(risk_level, "#6b7280")
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: {{color}}; color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+            .content {{ background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }}
+            .alert-box {{ background: white; padding: 15px; margin: 15px 0; border-left: 4px solid {{color}}; }}
+            .footer {{ text-align: center; margin-top: 20px; color: #6b7280; font-size: 0.875rem; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 style="margin: 0;">Rainly Flood Alert</h1>
+                <p style="margin: 5px 0 0 0; font-size: 1.125rem;">{{risk_level}} RISK DETECTED</p>
+            </div>
+            
+            <div class="content">
+                <p><strong>Dear {{participant_name}},</strong></p>
+                
+                <p>This is an automated flood alert for your region:</p>
+                
+                <div class="alert-box">
+                    <h3 style="margin-top: 0; color: {{color}};">{{region_name}}, {{river_name}}</h3>
+                    <p><strong>Risk Level:</strong> {{risk_level}}</p>
+                    <p><strong>Water Level:</strong> {{water_level:.2f}}m (Threshold: {{threshold:.1f}}m)</p>
+                    <p><strong>Rainfall:</strong> {{rainfall:.0f}}mm</p>
+                    <p><strong>Action Required:</strong> {{action.upper()}}</p>
+                </div>
+                
+                <div style="background: #fef3c7; padding: 15px; border-radius: 6px; margin-top: 20px;">
+                    <strong>Recommended Actions:</strong>
+                    <ul>
+                        {{'<li>Move to higher ground immediately</li>' if risk_level in ['CRITICAL', 'HIGH'] else ''}}
+                        {{'<li>Prepare emergency supplies</li>' if risk_level in ['CRITICAL', 'HIGH', 'MEDIUM'] else ''}}
+                        {{'<li>Stay tuned for updates</li>'}}
+                        <li>Follow local authorities' instructions</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>Rainly - Early Flood Detection System for India</p>
+                <p>This is an automated message. Do not reply.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    # Replace placeholders manually since f-string with double braces is complex to maintain in potential multi-replace
+    # Actually, let's just use .format() or f-string carefully. 
+    # Use simple f-string as before but ensure I escape CSS braces.
+    
+    return html.format(
+        color=color,
+        risk_level=risk_level,
+        participant_name=participant_name,
+        region_name=region_name,
+        river_name=river_name,
+        water_level=water_level,
+        threshold=threshold,
+        rainfall=rainfall,
+        action=action
+    )
+
 def send_via_resend(to_email: str, subject: str, html_body: str) -> dict:
     """Send email via Resend HTTP API (Bypasses SMTP blocks)"""
     if not RESEND_API_KEY:
