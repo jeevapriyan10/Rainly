@@ -76,29 +76,46 @@ def initialize_llm():
     
     return False
 
+import concurrent.futures
+
 def generate_with_llm(prompt: str, max_tokens: int = 500) -> str:
-    """Generate text using configured provider"""
-    try:
-        if LLM_PROVIDER == "google" and _gemini_model:
-            response = _gemini_model.generate_content(prompt)
-            return response.text
-            
-        elif LLM_PROVIDER == "local" and _model:
-            response = _model(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=0.7,
-                top_p=0.9,
-                stop=["</s>", "\n\n\n"],
-                echo=False
-            )
-            return response["choices"][0]["text"].strip()
-            
-    except Exception as e:
-        print(f"Generation failed: {e}")
-        return "Analysis unavailable at this moment."
+    """Generate text using configured provider with timeout"""
     
-    return "LLM not initialized properly."
+    def _run_inference():
+        try:
+            if LLM_PROVIDER == "google" and _gemini_model:
+                response = _gemini_model.generate_content(prompt)
+                return response.text
+                
+            elif LLM_PROVIDER == "local" and _model:
+                response = _model(
+                    prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    top_p=0.9,
+                    stop=["</s>", "\n\n\n"],
+                    echo=False
+                )
+                return response["choices"][0]["text"].strip()
+        except Exception as e:
+            print(f"Inference error: {e}")
+            return None
+        return None
+
+    # Use ThreadPool to enforce timeout (critical for emails)
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run_inference)
+            # Timeout set to 20 seconds - if LLM takes longer, fallback is better than failure
+            result = future.result(timeout=20) 
+            if result:
+                return result
+    except concurrent.futures.TimeoutError:
+        print("[WARN] LLM Generation timed out (20s). Using fallback.")
+    except Exception as e:
+        print(f"[ERROR] LLM Generation failed: {e}")
+    
+    return "Analysis unavailable due to high load."
 
 def analyze_with_llm(sensor_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """

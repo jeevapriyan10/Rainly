@@ -1,6 +1,20 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 
-const WS_URL = 'ws://localhost:8000/ws/realtime';
+const getWebSocketUrl = () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // Use the API URL from env if available (removing /api if present), or fallback to window.location.host
+    const host = process.env.REACT_APP_API_URL
+        ? new URL(process.env.REACT_APP_API_URL).host
+        : window.location.host;
+    // Ensure we don't have double slashes if running locally via proxy or potential mismatched base paths
+    // For production (Render), typically the frontend and backend are on same domain or specified via env
+    if (process.env.NODE_ENV === 'development') {
+        return 'ws://localhost:8000/ws/realtime';
+    }
+    return `${protocol}//${host}/ws/realtime`;
+};
+
+const WS_URL = getWebSocketUrl();
 
 export const useWebSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
