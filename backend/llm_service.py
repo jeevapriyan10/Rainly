@@ -15,9 +15,12 @@ LLM_MODEL_PATH = os.getenv("LLM_MODEL_PATH", "models/llm")
 LLM_MODEL_FILE = os.getenv("LLM_MODEL_FILE", "qwen2-0_5b-instruct-q4_k_m.gguf")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+import threading
+
 # Global model instance
 _model = None
 _gemini_model = None
+_model_lock = threading.Lock()
 
 def initialize_llm():
     """Initialize LLM (Local or Google Gemini)"""
@@ -57,6 +60,7 @@ def initialize_llm():
                 return False
             
             print(f"[INFO] Loading GGUF model: {LLM_MODEL_FILE}")
+            # n_threads should be set based on CPU cores. Lowering to 4 to avoid starving the main loop if on 4-core machine
             _model = Llama(
                 model_path=model_path,
                 n_ctx=2048,
@@ -84,14 +88,17 @@ def generate_with_llm(prompt: str, max_tokens: int = 500) -> str:
             return response.text
             
         elif LLM_PROVIDER == "local" and _model:
-            response = _model(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=0.7,
-                top_p=0.9,
-                stop=["</s>", "\n\n\n"],
-                echo=False
-            )
+            # Acquire lock to ensure only one generation happens at a time
+            # This prevents the application from crashing if multiple threads try to use the model
+            with _model_lock:
+                response = _model(
+                    prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    top_p=0.9,
+                    stop=["</s>", "\n\n\n"],
+                    echo=False
+                )
             return response["choices"][0]["text"].strip()
             
     except Exception as e:
@@ -142,7 +149,7 @@ def generate_detailed_warning(participant: dict, region: dict, device: dict, pre
         return generate_enhanced_email_fallback(participant, region, device, prediction, sensor_data)
     
     try:
-        prompt = f"""You are the official Rainly Flood Warning System.
+        prompt = f"""You are the official Rainly - Flood Guardian System.
         Write a formal ALERT EMAIL to a resident named {participant.get('name', 'Resident')}.
         DO NOT roleplay as the resident. You are the SYSTEM sending the warning.
         

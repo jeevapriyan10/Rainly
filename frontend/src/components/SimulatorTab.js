@@ -244,20 +244,57 @@ const SimulatorTab = () => {
                                                 <div style={{ marginTop: '0.5rem', fontWeight: '600' }}>
                                                     Risk: {deviceUpdates[selectedDevice.device_id].risk_level}
                                                 </div>
-                                                {deviceUpdates[selectedDevice.device_id].llm_reasoning && (
+                                                {/* LLM Status Indicator */}
+                                                {deviceUpdates[selectedDevice.device_id]?.llm_status === 'processing' && (
+                                                    <div style={{
+                                                        marginTop: '0.75rem',
+                                                        padding: '0.75rem',
+                                                        background: '#eff6ff',
+                                                        borderRadius: '6px',
+                                                        borderLeft: '4px solid #3b82f6',
+                                                        fontSize: '0.8rem',
+                                                        color: '#1e40af',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.75rem'
+                                                    }}>
+                                                        <div style={{
+                                                            width: '16px',
+                                                            height: '16px',
+                                                            border: '2px solid #3b82f6',
+                                                            borderTopColor: 'transparent',
+                                                            borderRadius: '50%',
+                                                            animation: 'spin 1s linear infinite'
+                                                        }} />
+                                                        <strong>AI is analyzing flood risk...</strong>
+                                                        <style>{`
+                                                            @keyframes spin {
+                                                                to { transform: rotate(360deg); }
+                                                            }
+                                                        `}</style>
+                                                    </div>
+                                                )}
+
+                                                {deviceUpdates[selectedDevice.device_id]?.llm_reasoning && (
                                                     <div style={{
                                                         marginTop: '0.75rem',
                                                         padding: '0.75rem',
                                                         background: '#ffffff',
                                                         borderRadius: '6px',
-                                                        borderLeft: '4px solid #3b82f6',
+                                                        borderLeft: '4px solid #10b981',
                                                         fontSize: '0.8rem',
                                                         color: '#1e293b'
                                                     }}>
-                                                        <strong>AI Analysis:</strong><br />
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                            <strong>AI Analysis Report:</strong>
+                                                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                                                {deviceUpdates[selectedDevice.device_id]?.llm_status === 'completed' ? 'Just Now' : 'Cached'}
+                                                            </span>
+                                                        </div>
                                                         {deviceUpdates[selectedDevice.device_id].llm_reasoning}
                                                     </div>
                                                 )}
+
                                             </div>
                                         )}
                                     </div>

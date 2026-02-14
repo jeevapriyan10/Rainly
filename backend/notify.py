@@ -1,16 +1,20 @@
 """
 Enhanced Notification Service
-Sends SMS (Twilio) and Email (Gmail SMTP) flood alerts
+Sends SMS (Twilio) and Email (Gmail SMTP / Resend API) flood alerts.
 """
 import os
-from dotenv import load_dotenv
 import smtplib
+import requests
+import asyncio
+from dotenv import load_dotenv
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from typing import Dict, Any, Optional
 
 load_dotenv()
 
 # Initialize Twilio (optional)
+TWILIO_ENABLED = False
 try:
     from twilio.rest import Client
     
@@ -23,104 +27,108 @@ try:
         TWILIO_ENABLED = True
         print("[SUCCESS] Twilio SMS enabled")
     else:
-        TWILIO_ENABLED = False
         print("[WARN] Twilio not configured (SMS disabled)")
 except Exception as e:
-    TWILIO_ENABLED = False
     print(f"[WARN] Twilio not available: {e}")
 
-# Initialize Resend (HTTP API - Best for Render/Vercel)
+# Email Configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-import requests
+GMAIL_ADDRESS = os.getenv('GMAIL_ADDRESS')
+GMAIL_PASSWORD = os.getenv('GMAIL_PASSWORD')
+EMAIL_ENABLED = bool(RESEND_API_KEY or (GMAIL_ADDRESS and GMAIL_PASSWORD))
 
 def format_sms_alert(region_name: str, river_name: str, risk_level: str, water_level: float, threshold: float, action: str) -> str:
     """Format SMS message (max 160 chars for free SMS)"""
     if risk_level == "CRITICAL":
-        return f"[CRITICAL] FLOOD at {region_name}, {river_name}! Water {water_level}m (limit {threshold}m). EVACUATE NOW!"
+        return f"[CRITICAL] FLOOD at {region_name}, {river_name}! Water {water_level:.2f}m (limit {threshold:.1f}m). EVACUATE NOW!"
     elif risk_level == "HIGH":
-        return f"[HIGH] Flood risk at {region_name}, {river_name}. Water {water_level}m. Evacuate immediately."
+        return f"[HIGH] Flood risk at {region_name}, {river_name}. Water {water_level:.2f}m. Evacuate immediately."
     elif risk_level == "MEDIUM":
-        return f"[WARNING] Flood warning at {region_name}. Water rising. Prepare for evacuation."
+        return f"[WARNING] Flood warning at {region_name}. Water rising to {water_level:.2f}m. Prepare for evacuation."
     else:
-        return f"[INFO] Flood monitor: {region_name} normal. Water {water_level}m."
+        return f"[INFO] Flood monitor: {region_name} normal. Water {water_level:.2f}m."
 
 def format_email_alert(participant_name: str, region_name: str, river_name: str, risk_level: str, water_level: float, threshold: float, rainfall: float, action: str) -> str:
-    """Format HTML email"""
+    """Format HTML email using standard f-string"""
     color = {"CRITICAL": "#dc2626", "HIGH": "#ef4444", "MEDIUM": "#f59e0b", "LOW": "#10b981"}.get(risk_level, "#6b7280")
     
+    # Conditional list items
+    actions_list = ""
+    if risk_level in ['CRITICAL', 'HIGH']:
+        actions_list += "<li>Move to higher ground immediately</li>"
+        actions_list += "<li>Do not walk through moving water</li>"
+    if risk_level in ['CRITICAL', 'HIGH', 'MEDIUM']:
+        actions_list += "<li>Prepare emergency supplies (Medekit, Water, Torch)</li>"
+    actions_list += "<li>Stay tuned for official updates</li>"
+    actions_list += "<li>Follow local authorities' instructions</li>"
+
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background: {{color}}; color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
-            .content {{ background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }}
-            .alert-box {{ background: white; padding: 15px; margin: 15px 0; border-left: 4px solid {{color}}; }}
-            .footer {{ text-align: center; margin-top: 20px; color: #6b7280; font-size: 0.875rem; }}
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; }}
+            .header {{ background: {color}; color: white; padding: 25px; border-radius: 8px 8px 0 0; text-align: center; }}
+            .content {{ background: #ffffff; padding: 25px; border-radius: 0 0 8px 8px; }}
+            .alert-box {{ background: #fdf2f2; padding: 20px; margin: 20px 0; border-left: 5px solid {color}; border-radius: 4px; }}
+            .data-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }}
+            .footer {{ text-align: center; margin-top: 25px; color: #6b7280; font-size: 0.875rem; border-top: 1px solid #e5e7eb; padding-top: 15px; }}
+            .btn {{ display: inline-block; background: {color}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1 style="margin: 0;">Rainly Flood Alert</h1>
-                <p style="margin: 5px 0 0 0; font-size: 1.125rem;">{{risk_level}} RISK DETECTED</p>
+                <h1 style="margin: 0; font-size: 24px;">FLOOD ALERT</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">{risk_level} RISK - {region_name.upper()}</p>
             </div>
             
             <div class="content">
-                <p><strong>Dear {{participant_name}},</strong></p>
+                <p><strong>Dear {participant_name},</strong></p>
                 
-                <p>This is an automated flood alert for your region:</p>
+                <p>This is an automated flood warning from the Rainly Early Detection System.</p>
                 
                 <div class="alert-box">
-                    <h3 style="margin-top: 0; color: {{color}};">{{region_name}}, {{river_name}}</h3>
-                    <p><strong>Risk Level:</strong> {{risk_level}}</p>
-                    <p><strong>Water Level:</strong> {{water_level:.2f}}m (Threshold: {{threshold:.1f}}m)</p>
-                    <p><strong>Rainfall:</strong> {{rainfall:.0f}}mm</p>
-                    <p><strong>Action Required:</strong> {{action.upper()}}</p>
+                    <h3 style="margin-top: 0; color: {color}; text-transform: uppercase;">Current Status: {risk_level}</h3>
+                    <p><strong>Location:</strong> {region_name}, {river_name}</p>
+                    <p><strong>Action Required:</strong> <span style="font-weight: bold; font-size: 1.1em;">{action.upper()}</span></p>
+                    
+                    <hr style="border: 0; border-top: 1px solid #ffcccc; margin: 15px 0;">
+                    
+                    <div class="data-grid">
+                        <div>Water Level:<br><strong>{water_level:.2f}m</strong> <small>(Limit: {threshold:.1f}m)</small></div>
+                        <div>Rainfall:<br><strong>{rainfall:.0f}mm</strong></div>
+                    </div>
                 </div>
                 
-                <div style="background: #fef3c7; padding: 15px; border-radius: 6px; margin-top: 20px;">
-                    <strong>Recommended Actions:</strong>
-                    <ul>
-                        {{'<li>Move to higher ground immediately</li>' if risk_level in ['CRITICAL', 'HIGH'] else ''}}
-                        {{'<li>Prepare emergency supplies</li>' if risk_level in ['CRITICAL', 'HIGH', 'MEDIUM'] else ''}}
-                        {{'<li>Stay tuned for updates</li>'}}
-                        <li>Follow local authorities' instructions</li>
+                <div style="background: #fefce8; padding: 20px; border-radius: 8px; border: 1px solid #fde047; margin-top: 20px;">
+                    <strong style="color: #854d0e; display: block; margin-bottom: 10px;">Recommended Safety Actions:</strong>
+                    <ul style="margin: 0; padding-left: 20px; color: #713f12;">
+                        {actions_list}
                     </ul>
                 </div>
+
+                <p style="text-align: center;">
+                    <a href="#" class="btn">View Live Dashboard</a>
+                </p>
             </div>
             
             <div class="footer">
-                <p>Rainly - Early Flood Detection System for India</p>
-                <p>This is an automated message. Do not reply.</p>
+                <p><strong>Rainly - AI-Powered Flood detection System</strong></p>
+                <p>Emergency Contacts: 1078 (NDRF) | 100 (Police) | 108 (Ambulance)</p>
+                <p style="font-size: 0.75rem;">This is an automated message generated based on real-time sensor data.</p>
             </div>
         </div>
     </body>
     </html>
     """
-    # Replace placeholders manually since f-string with double braces is complex to maintain in potential multi-replace
-    # Actually, let's just use .format() or f-string carefully. 
-    # Use simple f-string as before but ensure I escape CSS braces.
-    
-    return html.format(
-        color=color,
-        risk_level=risk_level,
-        participant_name=participant_name,
-        region_name=region_name,
-        river_name=river_name,
-        water_level=water_level,
-        threshold=threshold,
-        rainfall=rainfall,
-        action=action
-    )
+    return html
 
-def send_via_resend(to_email: str, subject: str, html_body: str) -> dict:
-    """Send email via Resend HTTP API (Bypasses SMTP blocks)"""
+def _sync_send_resend(to_email: str, subject: str, html_body: str) -> dict:
+    """Blocking Send via Resend"""
     if not RESEND_API_KEY:
         return {"status": "failed", "error": "Missing RESEND_API_KEY"}
-    
     try:
         response = requests.post(
             "https://api.resend.com/emails",
@@ -145,14 +153,8 @@ def send_via_resend(to_email: str, subject: str, html_body: str) -> dict:
         print(f"[ERROR] Resend exception: {e}")
         return {"status": "failed", "error": str(e)}
 
-async def send_email(to_email: str, subject: str, html_body: str) -> dict:
-    """Send email via Resend (Preferred) or Gmail SMTP (Fallback)"""
-    
-    # 1. Try Resend API first (Works on Render/Vercel)
-    if RESEND_API_KEY:
-        return send_via_resend(to_email, subject, html_body)
-        
-    # 2. Try Gmail SMTP (Often blocked on Cloud)
+def _sync_send_smtp(to_email: str, subject: str, html_body: str) -> dict:
+    """Blocking Send via SMTP"""
     if not EMAIL_ENABLED:
         print(f"[INFO] Email disabled. Would send to {to_email}")
         return {"status": "disabled", "message": "Gmail/Resend not configured"}
@@ -162,11 +164,8 @@ async def send_email(to_email: str, subject: str, html_body: str) -> dict:
         msg['Subject'] = subject
         msg['From'] = f"Rainly Alerts <{GMAIL_ADDRESS}>"
         msg['To'] = to_email
+        msg.attach(MIMEText(html_body, 'html'))
         
-        html_part = MIMEText(html_body, 'html')
-        msg.attach(html_part)
-        
-        # Try standard TLS port 587 first
         try:
             with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
                 server.starttls()
@@ -174,7 +173,6 @@ async def send_email(to_email: str, subject: str, html_body: str) -> dict:
                 server.send_message(msg)
         except Exception as e1:
             print(f"[WARN] Port 587 failed ({e1}), trying SSL 465...")
-            # Fallback to SSL port 465
             with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
                 server.login(GMAIL_ADDRESS.strip(), GMAIL_PASSWORD.strip())
                 server.send_message(msg)
@@ -183,82 +181,100 @@ async def send_email(to_email: str, subject: str, html_body: str) -> dict:
         return {"status": "sent"}
     except Exception as e:
         print(f"[ERROR] Email failed for {to_email}: {e}")
-        print("💡 HINT: Cloud providers (Render/Vercel) often block SMTP. Use 'RESEND_API_KEY' instead!")
         return {"status": "failed", "error": str(e)}
+
+def _sync_send_sms(to_phone: str, message: str) -> dict:
+    """Blocking Send via Twilio"""
+    if not TWILIO_ENABLED:
+        return {"status": "disabled", "message": "Twilio not configured"}
+    try:
+        message = twilio_client.messages.create(
+            body=message,
+            from_=TWILIO_PHONE,
+            to=to_phone
+        )
+        print(f"[SUCCESS] SMS sent to {to_phone}")
+        return {"status": "sent", "sid": message.sid}
+    except Exception as e:
+        print(f"[ERROR] SMS failed for {to_phone}: {e}")
+        return {"status": "failed", "error": str(e)}
+
+async def send_email(to_email: str, subject: str, html_body: str) -> dict:
+    """Async wrapper for email sending"""
+    if RESEND_API_KEY:
+        return await asyncio.to_thread(_sync_send_resend, to_email, subject, html_body)
+    return await asyncio.to_thread(_sync_send_smtp, to_email, subject, html_body)
+
+async def send_sms(to_phone: str, message: str) -> dict:
+    """Async wrapper for SMS sending"""
+    return await asyncio.to_thread(_sync_send_sms, to_phone, message)
 
 async def send_flood_alert(participant: dict, region: dict, device: dict, prediction: dict, sensor_data: dict) -> dict:
     """
-    Send both SMS and Email flood alert
-    Returns: {
-        "sms": {"status": "sent" | "failed" | "disabled"},
-        "email": {"status": "sent" | "failed" | "disabled"}
-    }
+    Send both SMS and Email flood alert.
+    Orchestrates the notification process non-blockingly.
     """
-    # Format messages
-    sms_message = format_sms_alert(
-        region_name=region['name'],
-        river_name=region['river_name'],
-        risk_level=prediction['risk_level'],
-        water_level=sensor_data['water_level'],
-        threshold=device['alert_threshold'],
-        action=prediction['warning_type']
-    )
-    
-    email_html = format_email_alert(
-        participant_name=participant['name'],
-        region_name=region['name'],
-        river_name=region['river_name'],
-        risk_level=prediction['risk_level'],
-        water_level=sensor_data['water_level'],
-        threshold=device['alert_threshold'],
-        rainfall=sensor_data['rainfall'],
-        action=prediction['warning_type']
-    )
-    
-    email_subject = f"[{prediction['risk_level']}] Flood Alert - {region['name']}"
-    
-    # Send both
     results = {}
     
-    # Send SMS
+    # 1. SMS (Fastest)
+    sms_message = format_sms_alert(
+        region_name=region.get('name', 'Unknown'),
+        river_name=region.get('river_name', 'Unknown'),
+        risk_level=prediction.get('risk_level', 'UNKNOWN'),
+        water_level=sensor_data.get('water_level', 0),
+        threshold=device.get('alert_threshold', 0),
+        action=prediction.get('warning_type', 'monitor')
+    )
+    
     if participant.get('phone'):
         results['sms'] = await send_sms(participant['phone'], sms_message)
     else:
         results['sms'] = {"status": "no_phone"}
     
-    # Send Email (construct from phone if no email field)
+    # 2. Email (Detailed)
     participant_email = participant.get('email')
-    if not participant_email:
-        # Some participants might only have phone
-        participant_email = None
-    
     if participant_email:
-        # Use LLM to generate detailed email content if available
+        email_subject = f"[{prediction.get('risk_level', 'INFO')}] Flood Alert - {region.get('name', 'Unknown')}"
+        
+        # Try to use LLM for detailed email if enabled
+        email_content = None
         try:
-            from llm_service import LLM_ENABLED, generate_detailed_warning
-            if LLM_ENABLED:
-                detailed_html = generate_detailed_warning(
+            if os.getenv("LLM_ENABLED", "false").lower() == "true":
+                from llm_service import generate_detailed_warning
+                # Run potentially slow LLM generation in thread
+                email_content = await asyncio.to_thread(
+                    generate_detailed_warning,
                     participant=participant,
                     region=region,
                     device=device,
                     prediction=prediction,
                     sensor_data=sensor_data
                 )
-                results['email'] = await send_email(participant_email, email_subject, detailed_html)
-            else:
-                # Fallback to standard email
-                results['email'] = await send_email(participant_email, email_subject, email_html)
         except Exception as e:
-            print(f"[WARN] LLM email generation failed, using fallback: {e}")
-            results['email'] = await send_email(participant_email, email_subject, email_html)
+            print(f"[WARN] LLM Email generation failed, using standard template: {e}")
+        
+        # Fallback if LLM failed or disabled
+        if not email_content:
+            email_content = format_email_alert(
+                participant_name=participant.get('name', 'Resident'),
+                region_name=region.get('name', 'Unknown'),
+                river_name=region.get('river_name', 'Unknown'),
+                risk_level=prediction.get('risk_level', 'UNKNOWN'),
+                water_level=sensor_data.get('water_level', 0),
+                threshold=device.get('alert_threshold', 0),
+                rainfall=sensor_data.get('rainfall', 0),
+                action=prediction.get('warning_type', 'monitor')
+            )
+            
+        results['email'] = await send_email(participant_email, email_subject, email_content)
     else:
         results['email'] = {"status": "no_email"}
     
     return results
 
 async def send_notification(participant: dict, message: str):
-    """Legacy function for compatibility"""
-    phone = participant.get('phone', '')
+    """Legacy helper for simple messages"""
+    phone = participant.get('phone')
     if phone:
         return await send_sms(phone, message)
     return {"status": "no_phone"}
