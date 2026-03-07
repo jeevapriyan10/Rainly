@@ -72,3 +72,35 @@ export const fetchAnalytics = async () => {
     const response = await fetch(`${API_BASE}/analytics`);
     return response.json();
 };
+
+// --- Simulation API ---
+
+export const fetchActiveSimulations = async () => {
+    const response = await fetch(`${API_BASE}/simulation/active`);
+    return response.json();
+};
+
+export const startSimulationForDevice = async (deviceId, params) => {
+    const response = await fetch(`${API_BASE}/simulation/start?device_id=${deviceId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+    });
+    return response.json();
+};
+
+export const stopSimulationForDevice = async (deviceId) => {
+    const response = await fetch(`${API_BASE}/simulation/stop/${deviceId}`, {
+        method: 'POST'
+    });
+    return response.json();
+};
+
+export const adjustSimulationForDevice = async (deviceId, params) => {
+    const response = await fetch(`${API_BASE}/simulation/adjust/${deviceId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+    });
+    return response.json();
+};

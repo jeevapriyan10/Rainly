@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { simulatePayload, fetchDevices } from '../api';
+import { simulatePayload, fetchDevices, fetchActiveSimulations, startSimulationForDevice, stopSimulationForDevice, adjustSimulationForDevice } from '../api';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const SimulatorTab = () => {
@@ -71,8 +71,7 @@ const SimulatorTab = () => {
 
     const loadActiveSimulations = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/simulation/active');
-            const data = await response.json();
+            const data = await fetchActiveSimulations();
             setActiveSimulations(data.active_simulations || []);
         } catch (err) {
             console.error('Failed to load active simulations:', err);
@@ -84,21 +83,13 @@ const SimulatorTab = () => {
 
         setLoading(true);
         try {
-            const response = await fetch(
-                `http://localhost:8000/api/simulation/start?device_id=${selectedDevice.device_id}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        initial_water_level: parseFloat(formData.water_level),
-                        initial_rainfall: parseFloat(formData.rainfall),
-                        initial_flow_rate: parseFloat(formData.flow_rate),
-                        variation_speed: simConfig.speed,
-                        trend: simConfig.trend
-                    })
-                }
-            );
-            const result = await response.json();
+            const result = await startSimulationForDevice(selectedDevice.device_id, {
+                initial_water_level: parseFloat(formData.water_level),
+                initial_rainfall: parseFloat(formData.rainfall),
+                initial_flow_rate: parseFloat(formData.flow_rate),
+                variation_speed: simConfig.speed,
+                trend: simConfig.trend
+            });
             console.log('Simulation started:', result);
             await loadActiveSimulations();
         } catch (err) {
@@ -110,9 +101,7 @@ const SimulatorTab = () => {
 
     const stopSimulation = async (deviceId) => {
         try {
-            await fetch(`http://localhost:8000/api/simulation/stop/${deviceId}`, {
-                method: 'POST'
-            });
+            await stopSimulationForDevice(deviceId);
             await loadActiveSimulations();
         } catch (err) {
             console.error('Failed to stop simulation:', err);
@@ -121,11 +110,7 @@ const SimulatorTab = () => {
 
     const adjustSimulation = async (deviceId, params) => {
         try {
-            await fetch(`http://localhost:8000/api/simulation/adjust/${deviceId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(params)
-            });
+            await adjustSimulationForDevice(deviceId, params);
         } catch (err) {
             console.error('Failed to adjust simulation:', err);
         }
