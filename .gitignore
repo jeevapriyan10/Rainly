@@ -10,6 +10,8 @@ backend/models/llm/*.gguf
 backend/models/llm/*.bin
 backend/models/
 *.gguf
+docs/demo.mp4
+
 
 # Node/Frontend
 node_modules/
